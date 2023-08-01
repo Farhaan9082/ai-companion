@@ -41,12 +41,12 @@ export async function GET() {
       line_items: [
         {
           price_data: {
-            currency: "USD",
+            currency: "INR",
             product_data: {
               name: "Companion Pro",
               description: "Create Custom AI Companions"
             },
-            unit_amount: 999,
+            unit_amount: 100000,
             recurring: {
               interval: "month"
             }
