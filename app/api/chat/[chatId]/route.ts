@@ -1,8 +1,7 @@
 import dotenv from "dotenv";
-import { StreamingTextResponse, LangChainStream } from "ai";
+import Replicate from "replicate";
+import { StreamingTextResponse } from "ai";
 import { currentUser } from "@clerk/nextjs";
-import { Replicate } from "langchain/llms/replicate";
-import { CallbackManager } from "langchain/callbacks";
 import { NextResponse } from "next/server";
 
 import { MemoryManager } from "@/lib/memory";
@@ -62,46 +61,34 @@ export async function POST(
     if (records.length === 0) {
       await memoryManager.seedChatHistory(companion.seed, "\n\n", companionKey);
     }
-    await memoryManager.writeToHistory("User: " + prompt + "\n", companionKey);
+    await memoryManager.writeToHistory("Human: " + prompt + "\n", companionKey);
 
     const recentChatHistory = await memoryManager.readLatestHistory(
       companionKey
     );
 
-    const { handlers } = LangChainStream();
-
-    const model = new Replicate({
-      model:
-        "a16z-infra/llama-2-13b-chat:df7690f1994d94e96ad9d568eac121aecf50684a0b0963b25a41cc40061269e5",
-      input: {
-        max_length: 2048,
-      },
-      apiKey: process.env.REPLICATE_API_TOKEN,
-      callbackManager: CallbackManager.fromHandlers(handlers),
+    const replicate = new Replicate({
+      auth: process.env.REPLICATE_API_TOKEN as string,
     });
 
-    // Turn verbose on for debugging
-    model.verbose = true;
+    const output = (await replicate.run(
+      "a16z-infra/llama-2-13b-chat:d5da4236b006f967ceb7da037be9cfc3924b20d21fed88e1e94f19d56e2d3111",
+      {
+        input: {
+          prompt: `
+          ${companion.instructions}
 
-    const resp = String(
-      await model
-        .call(
-          `
-        ONLY generate plain sentences without prefix of who is speaking. DO NOT use ${companion.name}: prefix. 
+          Below is the conversation you are in.
 
-        ${companion.instructions}
+          Answer last question in 1 or 2 sentence without prefix of who is speaking. DO NOT use ${companion.name}: prefix.
+      
+          ${recentChatHistory}
+        `,
+        },
+      }
+    )) as string[];
 
-        Below is the conversation ${companion.name} is in.
-
-        ${recentChatHistory}\n${companion.name}:
-        `
-        )
-        .catch(console.error)
-    );
-
-    const cleaned = resp.replaceAll(",", "");
-    const chunks = cleaned.split("\n");
-    const response = chunks[0];
+    const response = output.join("");
 
     await memoryManager.writeToHistory("" + response.trim(), companionKey);
     var Readable = require("stream").Readable;
